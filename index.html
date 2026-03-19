@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Car Rental Pricing</title>
+    <style>
+        body {
+            font-family: Arial;
+            background: #f4f6f9;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+        }
+
+        .cards {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            width: 200px;
+            border-radius: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            cursor: pointer;
+            text-align: center;
+            transition: 0.3s;
+        }
+
+        .card:hover {
+            transform: scale(1.05);
+        }
+
+        .selected {
+            border: 3px solid #007bff;
+        }
+
+        .form {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        input, button {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+        }
+
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .result {
+            margin-top: 20px;
+            text-align: center;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🚗 Dynamic Car Pricing</h1>
+
+    <!-- Car Cards -->
+    <div class="cards">
+        <div class="card" onclick="selectCar(this,1500)">
+            <h3>🚗 Hatchback</h3>
+            <p>₹1500</p>
+        </div>
+
+        <div class="card" onclick="selectCar(this,2000)">
+            <h3>🚘 Sedan</h3>
+            <p>₹2000</p>
+        </div>
+
+        <div class="card" onclick="selectCar(this,3000)">
+            <h3>🚙 SUV</h3>
+            <p>₹3000</p>
+        </div>
+    </div>
+
+    <!-- Form -->
+    <div class="form">
+        <input type="text" id="location" placeholder="Enter city (e.g. Delhi)">
+        <button onclick="getPrice()">Get Price</button>
+    </div>
+
+    <div class="result" id="result"></div>
+</div>
+
+<script>
+
+const API_KEY = "561772e1a2a69a87c104998c6176b707";
+
+let selectedPrice = null;
+
+// Select car
+function selectCar(element, price) {
+    document.querySelectorAll(".card").forEach(c => c.classList.remove("selected"));
+    element.classList.add("selected");
+    selectedPrice = price;
+}
+
+// Fetch weather
+async function getWeather(city) {
+    try {
+        let url = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}`;
+        console.log("Calling weather API:", url);
+
+        let res = await fetch(url);
+        let data = await res.json();
+
+        if (data.cod !== 200) {
+            alert("City not found!");
+            return "clear";
+        }
+
+        let w = data.weather[0].main.toLowerCase();
+
+        if (w.includes("rain")) return "rain";
+        if (w.includes("storm") || w.includes("thunder")) return "storm";
+
+        return "clear";
+
+    } catch {
+        return "clear";
+    }
+}
+
+// Get price
+async function getPrice() {
+
+    if (!selectedPrice) {
+        alert("Please select a car type");
+        return;
+    }
+
+    let location = document.getElementById("location").value;
+
+    if (!location) {
+        alert("Enter location");
+        return;
+    }
+
+    document.getElementById("result").innerHTML = "⏳ Calculating best price...";
+
+    let weather = await getWeather(location);
+
+    let res = await fetch("http://127.0.0.1:8000/predict_price", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            base_price: selectedPrice,
+            location: location,
+            weather: weather
+        })
+    });
+
+    let data = await res.json();
+
+    document.getElementById("result").innerHTML = `
+        📍 ${location} <br>
+        🌦 ${weather} <br>
+        🚗 Cars: ${data.available_cars} <br>
+        ⭐ Rating: ${data.customer_rating} <br>
+        📅 Weekend: ${data.weekend ? "Yes" : "No"} <br>
+        💰 Price: ₹${data.dynamic_price.toFixed(2)} <br>
+        📈 Demand: ${data.predicted_demand.toFixed(2)}
+    `;
+}
+
+</script>
+
+</body>
+</html>
