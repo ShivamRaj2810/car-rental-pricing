@@ -109,9 +109,6 @@
 </div>
 
 <script>
-
-const API_KEY = "561772e1a2a69a87c104998c6176b707";
-
 let selectedPrice = null;
 
 // Select car
@@ -119,32 +116,6 @@ function selectCar(element, price) {
     document.querySelectorAll(".card").forEach(c => c.classList.remove("selected"));
     element.classList.add("selected");
     selectedPrice = price;
-}
-
-// Fetch weather
-async function getWeather(city) {
-    try {
-        let url = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}`;
-        console.log("Calling weather API:", url);
-
-        let res = await fetch(url);
-        let data = await res.json();
-
-        if (data.cod !== 200) {
-            alert("City not found!");
-            return "clear";
-        }
-
-        let w = data.weather[0].main.toLowerCase();
-
-        if (w.includes("rain")) return "rain";
-        if (w.includes("storm") || w.includes("thunder")) return "storm";
-
-        return "clear";
-
-    } catch {
-        return "clear";
-    }
 }
 
 // Get price
@@ -164,15 +135,12 @@ async function getPrice() {
 
     document.getElementById("result").innerHTML = "⏳ Calculating best price...";
 
-    let weather = await getWeather(location);
-
     let res = await fetch("http://127.0.0.1:8000/predict_price", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({
             base_price: selectedPrice,
-            location: location,
-            weather: weather
+            location: location
         })
     });
 
@@ -180,7 +148,7 @@ async function getPrice() {
 
     document.getElementById("result").innerHTML = `
         📍 ${location} <br>
-        🌦 ${weather} <br>
+        🌦 ${data.weather} <br>
         🚗 Cars: ${data.available_cars} <br>
         ⭐ Rating: ${data.customer_rating} <br>
         📅 Weekend: ${data.weekend ? "Yes" : "No"} <br>
@@ -188,7 +156,6 @@ async function getPrice() {
         📈 Demand: ${data.predicted_demand.toFixed(2)}
     `;
 }
-
 </script>
 
 </body>
