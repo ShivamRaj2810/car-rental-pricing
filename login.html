@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login</title>
+</head>
+<body>
+
+<h2>Login</h2>
+
+<input type="email" id="email" placeholder="email"><br>
+<input type="password" id="password" placeholder="Password"><br>
+
+<button onclick="login()">Login</button>
+
+<p id="result"></p>
+
+<p>Don't have an account? <a href="register.html">Register</a></p>
+
+<script>
+async function login() {
+    let res = await fetch("http://127.0.0.1:8000/login", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            email: document.getElementById("email").value,
+            password: document.getElementById("password").value
+        })
+    });
+
+    let data = await res.json();
+
+    if (data.message) {
+        window.location.href = "index.html"; // go to pricing page
+    } else {
+        document.getElementById("result").innerText = data.error;
+    }
+}
+</script>
+
+</body>
+</html>

@@ -8,10 +8,14 @@ from pricing_logic import surge_price, event_adjustment, weather_adjustment
 from datetime import datetime
 import random
 from fastapi.middleware.cors import CORSMiddleware
-
 import requests
 
-# API_KEY="d4502c2f23a1ad875f373571329dbb0e"
+import sqlite3
+from passlib.hash import bcrypt
+
+from pydantic import BaseModel,EmailStr
+
+
 
 # 🔐 ENV setup
 from dotenv import load_dotenv
@@ -22,6 +26,28 @@ load_dotenv()   # auto-detects .env in project root
 API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
 print("API KEY:", API_KEY)
+
+
+# -------------------------------
+# User Database Setup
+# -------------------------------
+
+def create_user_table():
+    conn = sqlite3.connect("database/users.db")
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE,
+        password TEXT
+    )
+    """)
+
+    conn.commit()
+    conn.close()
+
+create_user_table()
 
 
 # -------------------------------
@@ -130,6 +156,60 @@ def home():
     return {"message": "Dynamic Pricing API Running"}
 
 
+#REGISTER
+
+# Request body model
+class User(BaseModel):
+    email: EmailStr
+    password: str
+
+@app.post("/register")
+def register(user: User):
+    email = user.email
+    password = user.password
+
+    if not email or not password:
+        return {"error": "Email and password required"}
+
+    hashed_password = bcrypt.hash(password)
+
+    conn = sqlite3.connect("database/users.db")
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(
+            "INSERT INTO users (email, password) VALUES (?, ?)",
+            (email, hashed_password)
+        )
+        conn.commit()
+        return {"message": "User registered successfully ✅"}
+
+    except sqlite3.IntegrityError:
+        return {"error": "email already exists ❌"}
+
+    finally:
+        conn.close()
+
+#LOGIN
+@app.post("/login")
+def login(data: dict):
+    email = data.get("email")
+    password = data.get("password")
+
+    conn = sqlite3.connect("database/users.db")
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM users WHERE email=?", (email,))
+    user = cursor.fetchone()
+
+    conn.close()
+
+    if user and bcrypt.verify(password, user[2]):
+        return {"message": "Login successful ✅"}
+    else:
+        return {"error": "Invalid credentials ❌"}
+
+
 @app.post("/predict_price")
 def predict_price(data: dict):
 
@@ -155,10 +235,21 @@ def predict_price(data: dict):
     price = weather_adjustment(price, weather)
 
     # 🤖 ML prediction
-    features = [[predicted_demand, available_cars, weekend, rating, price]]
-    final_price = price_model.predict(features)[0]
+    
+    import pandas as pd
 
-    weather = get_weather(location)
+    input_data = pd.DataFrame([{
+        "predicted_demand": predicted_demand,
+        "available_cars": available_cars,
+        "weekend": weekend,
+        "customer_rating": rating,
+        "base_price": price
+    }])
+
+    final_price = price_model.predict(input_data)[0]
+
+
+    # weather = get_weather(location)
     print("FINAL WEATHER USED:", weather)
 
     # Response
