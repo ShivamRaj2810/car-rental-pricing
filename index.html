@@ -135,26 +135,47 @@ async function getPrice() {
 
     document.getElementById("result").innerHTML = "⏳ Calculating best price...";
 
-    let res = await fetch("http://127.0.0.1:8000/predict_price", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-            base_price: selectedPrice,
-            location: location
-        })
-    });
+    let token = localStorage.getItem("token");
 
-    let data = await res.json();
+    try {
+        let res = await fetch("http://127.0.0.1:8000/predict_price", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                base_price: selectedPrice,
+                location: location
+            })
+        });
 
-    document.getElementById("result").innerHTML = `
-        📍 ${location} <br>
-        🌦 ${data.weather} <br>
-        🚗 Cars: ${data.available_cars} <br>
-        ⭐ Rating: ${data.customer_rating} <br>
-        📅 Weekend: ${data.weekend ? "Yes" : "No"} <br>
-        💰 Price: ₹${data.dynamic_price.toFixed(2)} <br>
-        📈 Demand: ${data.predicted_demand.toFixed(2)}
-    `;
+        // ✅ HANDLE ERROR STATUS
+        if (!res.ok) {
+            let err = await res.text();
+            document.getElementById("result").innerHTML = "❌ Error: " + err;
+            return;
+        }
+
+        // ✅ PARSE RESPONSE
+        let data = await res.json();
+        console.log("API RESPONSE:", data);
+
+        // ✅ SHOW RESULT
+        document.getElementById("result").innerHTML = `
+            📍 ${location}<br>
+            🌦 ${data.weather}<br>
+            🚗 Cars: ${data.available_cars}<br>
+            ⭐ Rating: ${data.customer_rating}<br>
+            📅 Weekend: ${data.weekend ? "Yes" : "No"}<br>
+            💰 Price: ₹${data.dynamic_price.toFixed(2)}<br>
+            📈 Demand: ${data.demand.toFixed(2)}
+        `;
+
+    } catch (error) {
+        console.error("ERROR:", error);
+        document.getElementById("result").innerHTML = "❌ Failed to fetch data";
+    }
 }
 </script>
 

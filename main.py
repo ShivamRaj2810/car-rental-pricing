@@ -1,37 +1,63 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+
 import pandas as pd
 import numpy as np
 import pickle
 from tensorflow.keras.models import load_model
 
-from pricing_logic import surge_price, event_adjustment, weather_adjustment
 from datetime import datetime
 import random
-from fastapi.middleware.cors import CORSMiddleware
-import requests
-
 import sqlite3
-from passlib.hash import bcrypt
-
-from pydantic import BaseModel,EmailStr
-
-
-
-# 🔐 ENV setup
-from dotenv import load_dotenv
+import requests
 import os
 
-load_dotenv()   # auto-detects .env in project root
+from jose import jwt, JWTError
+from passlib.context import CryptContext
+from pydantic import BaseModel, EmailStr
+from dotenv import load_dotenv
 
+from pricing_logic import surge_price, weather_adjustment
+
+# -------------------------------
+# ENV
+# -------------------------------
+load_dotenv()
 API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
-print("API KEY:", API_KEY)
-
+# -------------------------------
+# USER MODELS
+# -------------------------------
+class UserRegister(BaseModel):
+    email: EmailStr
+    password: str
 
 # -------------------------------
-# User Database Setup
+# APP
 # -------------------------------
+app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# -------------------------------
+# JWT CONFIG
+# -------------------------------
+SECRET_KEY = "supersecretkey"
+ALGORITHM = "HS256"
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# -------------------------------
+# DATABASE
+# -------------------------------
 def create_user_table():
     conn = sqlite3.connect("database/users.db")
     cursor = conn.cursor()
@@ -40,7 +66,8 @@ def create_user_table():
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT UNIQUE,
-        password TEXT
+        password TEXT,
+        customer_rating REAL DEFAULT 4.0
     )
     """)
 
@@ -49,17 +76,113 @@ def create_user_table():
 
 create_user_table()
 
+# -------------------------------
+# AUTH HELPERS
+# -------------------------------
+def get_user(email: str):
+    conn = sqlite3.connect("database/users.db")
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT email, password, customer_rating FROM users WHERE email=?", (email,))
+    row = cursor.fetchone()
+
+    conn.close()
+
+    if row:
+        return {"email": row[0], "password": row[1], "customer_rating": row[2]}
+    return None
+
+
+def verify_password(plain, hashed):
+    return pwd_context.verify(plain, hashed)
+
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
+
+
+def create_access_token(data: dict):
+    return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
+
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+
+        if email is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        user = get_user(email)
+
+        if user is None:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        return user
+
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+
+
 
 # -------------------------------
-# Utility Functions
+# REGISTER
 # -------------------------------
 
-# Weekend detection
+@app.post("/register")
+def register_user(user: UserRegister):
+
+    conn = sqlite3.connect("database/users.db")
+    cursor = conn.cursor()
+
+    # check if user exists
+    cursor.execute("SELECT * FROM users WHERE email=?", (user.email,))
+    if cursor.fetchone():
+        conn.close()
+        raise HTTPException(status_code=400, detail="User already exists")
+
+    hashed_password = get_password_hash(user.password)
+
+    cursor.execute(
+        "INSERT INTO users (email, password, customer_rating) VALUES (?, ?, ?)",
+        (user.email, hashed_password, 4.0)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return {"message": "User registered successfully ✅"}
+
+
+# -------------------------------
+# LOGIN (JWT)
+# -------------------------------
+@app.post("/token")
+def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    user = get_user(form_data.username)
+    print("EMAIL:", form_data.username)
+    print("USER:", user)
+
+    if not user or not verify_password(form_data.password, user["password"]):
+        raise HTTPException(status_code=400, detail="Invalid credentials")
+
+    access_token = create_access_token({"sub": user["email"]})
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
+
+
+# -------------------------------
+# UTILS
+# -------------------------------
 def get_weekend():
     return 1 if datetime.now().weekday() >= 5 else 0
 
 
-# Available cars simulation
 def get_available_cars(location):
     location = location.lower()
 
@@ -71,175 +194,75 @@ def get_available_cars(location):
         return random.randint(40, 80)
 
 
-# User rating simulation
-def get_user_rating():
-    return round(random.uniform(3.5, 5.0), 1)
-
-
-# 🌦 Weather from API (BACKEND)
 def get_weather(city):
     try:
         url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}"
-        print("Calling:", url)
-
         res = requests.get(url)
         data = res.json()
 
-        print("FULL RESPONSE:", data)   # 👈 VERY IMPORTANT
-
         if data.get("cod") != 200:
-            print("❌ API failed:", data)
             return "clear"
 
         w = data["weather"][0]["main"].lower()
-        print("🌦 RAW WEATHER:", w)
 
-        if "rain" in w or "drizzle" in w:
+        if "rain" in w:
             return "rain"
-
         elif "storm" in w or "thunder" in w:
             return "storm"
-
         elif "cloud" in w:
             return "cloudy"
-
-        elif "haze" in w or "mist" in w or "fog" in w or "smoke" in w:
+        elif "haze" in w or "fog" in w or "mist" in w:
             return "foggy"
-
         else:
             return "clear"
 
-    except Exception as e:
-        print("❌ ERROR:", e)
+    except:
         return "clear"
 
 
 # -------------------------------
-# FastAPI App
+# LOAD MODELS
 # -------------------------------
-
-app = FastAPI()
-
-# CORS (for frontend connection)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# -------------------------------
-# Load Models
-# -------------------------------
-
 price_model = pickle.load(open("models/price_model.pkl", "rb"))
 demand_model = load_model("models/demand_lstm.keras", compile=False)
 
 
-# -------------------------------
-# Demand Data
-# -------------------------------
-
 def get_past_demand():
     df = pd.read_csv("dataset/demand_data.csv")
-    demand = df["bookings"].tail(10).values
-    return demand
+    return df["bookings"].tail(10).values
 
 
 # -------------------------------
-# Routes
+# ROUTES
 # -------------------------------
-
 @app.get("/")
 def home():
     return {"message": "Dynamic Pricing API Running"}
 
 
-#REGISTER
-
-# Request body model
-class User(BaseModel):
-    email: EmailStr
-    password: str
-
-@app.post("/register")
-def register(user: User):
-    email = user.email
-    password = user.password
-
-    if not email or not password:
-        return {"error": "Email and password required"}
-
-    hashed_password = bcrypt.hash(password)
-
-    conn = sqlite3.connect("database/users.db")
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute(
-            "INSERT INTO users (email, password) VALUES (?, ?)",
-            (email, hashed_password)
-        )
-        conn.commit()
-        return {"message": "User registered successfully ✅"}
-
-    except sqlite3.IntegrityError:
-        return {"error": "email already exists ❌"}
-
-    finally:
-        conn.close()
-
-#LOGIN
-@app.post("/login")
-def login(data: dict):
-    email = data.get("email")
-    password = data.get("password")
-
-    conn = sqlite3.connect("database/users.db")
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT * FROM users WHERE email=?", (email,))
-    user = cursor.fetchone()
-
-    conn.close()
-
-    if user and bcrypt.verify(password, user[2]):
-        return {"message": "Login successful ✅"}
-    else:
-        return {"error": "Invalid credentials ❌"}
-
-
 @app.post("/predict_price")
-def predict_price(data: dict):
+def predict_price(data: dict, current_user: dict = Depends(get_current_user)):
 
     location = data["location"]
     base_price = data["base_price"]
 
-    # AUTO values
     available_cars = get_available_cars(location)
     weekend = get_weekend()
-    rating = get_user_rating()
+    rating = current_user["customer_rating"]
 
-    # 🌦 Fetch weather securely from backend
     weather = get_weather(location)
 
-    # 📈 Demand prediction (LSTM)
-    past_demand = get_past_demand()
-    past_demand = np.array(past_demand).reshape(1, 10, 1)  # FIXED shape
+    # Demand
+    past = np.array(get_past_demand()).reshape(1, 10, 1)
+    predicted_demand = demand_model.predict(past)[0][0]
 
-    predicted_demand = demand_model.predict(past_demand)[0][0]
-
-    # 💰 Pricing logic
+    # Pricing
     price = surge_price(base_price, predicted_demand, available_cars)
     price = weather_adjustment(price, weather)
 
-    # 🤖 ML prediction
-    
-    import pandas as pd
-
+    # ML model
     input_data = pd.DataFrame([{
-        "predicted_demand": predicted_demand,
+        "demand": predicted_demand,
         "available_cars": available_cars,
         "weekend": weekend,
         "customer_rating": rating,
@@ -248,16 +271,39 @@ def predict_price(data: dict):
 
     final_price = price_model.predict(input_data)[0]
 
-
-    # weather = get_weather(location)
-    print("FINAL WEATHER USED:", weather)
-
-    # Response
     return {
-        "predicted_demand": float(predicted_demand),
+        "demand": float(predicted_demand),
         "dynamic_price": float(final_price),
         "available_cars": available_cars,
         "customer_rating": rating,
         "weekend": weekend,
         "weather": weather
+    }
+
+
+# -------------------------------
+# BOOKING → UPDATE RATING
+# -------------------------------
+@app.post("/book")
+def book(current_user: dict = Depends(get_current_user)):
+
+    email = current_user["email"]
+    current_rating = current_user["customer_rating"]
+
+    new_rating = min(5.0, current_rating + 0.1)
+
+    conn = sqlite3.connect("database/users.db")
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "UPDATE users SET customer_rating=? WHERE email=?",
+        (new_rating, email)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return {
+        "message": "Booking successful 🚗",
+        "new_rating": new_rating
     }
