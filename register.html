@@ -6,7 +6,7 @@
         body {
             margin: 0;
             font-family: Arial;
-            background: linear-gradient(135deg, #ff7e5f, #feb47b);
+            background: linear-gradient(135deg, #667eea, #764ba2);
             height: 100vh;
             display: flex;
             justify-content: center;
@@ -14,40 +14,72 @@
         }
 
         .card {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            padding: 30px;
-            border-radius: 15px;
-            width: 300px;
+            background: rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(15px);
+            padding: 35px;
+            border-radius: 20px;
+            width: 320px;
             text-align: center;
             color: white;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+        }
+
+        h2 {
+            margin-bottom: 20px;
         }
 
         input {
             width: 100%;
-            padding: 10px;
-            margin: 10px 0;
+            padding: 12px;
+            margin: 12px 0;
             border: none;
-            border-radius: 8px;
+            border-radius: 10px;
+            outline: none;
+            font-size: 14px;
         }
 
         button {
             width: 100%;
-            padding: 10px;
+            padding: 12px;
             background: #ff512f;
             border: none;
             color: white;
-            border-radius: 8px;
+            border-radius: 10px;
             cursor: pointer;
             font-weight: bold;
+            transition: 0.3s;
         }
 
         button:hover {
             background: #dd2476;
+            transform: scale(1.03);
+        }
+
+        #result {
+            margin-top: 15px;
+            font-weight: bold;
+        }
+
+        .success {
+            color: #00ffcc;
+        }
+
+        .error {
+            color: #ff4d4d;
         }
 
         a {
-            color: white;
+            color: #ffd;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .loader {
+            display: none;
+            margin-top: 10px;
         }
     </style>
 </head>
@@ -55,12 +87,14 @@
 <body>
 
 <div class="card">
-    <h2>📝 Register</h2>
+    <h2>🚗 Create Account</h2>
 
     <input type="email" id="email" placeholder="Email">
     <input type="password" id="password" placeholder="Password">
 
     <button onclick="register()">Register</button>
+
+    <div class="loader" id="loader">⏳ Creating account...</div>
 
     <p id="result"></p>
 
@@ -68,27 +102,54 @@
 </div>
 
 <script>
+
+const BASE_URL = "https://car-rental-pricing.onrender.com";
+
 async function register() {
 
     let email = document.getElementById("email").value;
     let password = document.getElementById("password").value;
 
-    let res = await fetch("http://127.0.0.1:8000/register", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ email, password })
-    });
+    let result = document.getElementById("result");
+    let loader = document.getElementById("loader");
 
-    let data = await res.json();
+    if (!email || !password) {
+        result.innerHTML = "❌ Fill all fields";
+        result.className = "error";
+        return;
+    }
 
-    if (data.message) {
-        document.getElementById("result").innerHTML = "✅ Registered successfully";
-    } else {
-        document.getElementById("result").innerHTML = "❌ Error: " + data.error;
+    loader.style.display = "block";
+    result.innerHTML = "";
+
+    try {
+        let res = await fetch(`${BASE_URL}/register`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ email, password })
+        });
+
+        let data = await res.json();
+
+        loader.style.display = "none";
+
+        if (data.message) {
+            result.innerHTML = "✅ Registered successfully";
+            result.className = "success";
+        } else {
+            result.innerHTML = "❌ " + (data.error || "Something went wrong");
+            result.className = "error";
+        }
+
+    } catch (err) {
+        loader.style.display = "none";
+        result.innerHTML = "❌ Server error";
+        result.className = "error";
     }
 }
+
 </script>
 
 </body>
