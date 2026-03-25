@@ -49,7 +49,7 @@ app.add_middleware(
 # -------------------------------
 # JWT CONFIG
 # -------------------------------
-SECRET_KEY = "supersecretkey"
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
