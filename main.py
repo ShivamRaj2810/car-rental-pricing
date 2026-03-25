@@ -5,7 +5,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import pandas as pd
 import numpy as np
 import pickle
-from tensorflow.keras.models import load_model
+
 
 from datetime import datetime
 import random
@@ -224,12 +224,21 @@ def get_weather(city):
 # LOAD MODELS
 # -------------------------------
 price_model = pickle.load(open("models/price_model.pkl", "rb"))
-demand_model = load_model("models/demand_lstm.keras", compile=False)
 
 
-def get_past_demand():
+
+
+def get_predicted_demand():
     df = pd.read_csv("dataset/demand_data.csv")
-    return df["bookings"].tail(10).values
+
+    recent = df["bookings"].tail(10)
+
+    # weighted average (better than mean)
+    weights = np.arange(1, len(recent) + 1)
+
+    demand = np.average(recent, weights=weights)
+
+    return float(demand)
 
 
 # -------------------------------
@@ -253,8 +262,7 @@ def predict_price(data: dict, current_user: dict = Depends(get_current_user)):
     weather = get_weather(location)
 
     # Demand
-    past = np.array(get_past_demand()).reshape(1, 10, 1)
-    predicted_demand = demand_model.predict(past)[0][0]
+    predicted_demand = get_predicted_demand()
 
     # Pricing
     price = surge_price(base_price, predicted_demand, available_cars)
