@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>Register</title>
     <style>
         body {
@@ -103,7 +104,9 @@
 
 <script>
 
-const BASE_URL = "https://car-rental-pricing.onrender.com";
+const BASE_URL = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"
+    ? "http://127.0.0.1:8000"
+    : "https://car-rental-pricing.onrender.com";
 
 async function register() {
 

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>Car Rental Pricing</title>
     <style>
         body {
@@ -109,6 +110,11 @@
 </div>
 
 <script>
+
+const BASE_URL = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"
+    ? "http://127.0.0.1:8000"
+    : "https://car-rental-pricing.onrender.com";
+
 let selectedPrice = null;
 
 // Select car
@@ -138,7 +144,7 @@ async function getPrice() {
     let token = localStorage.getItem("token");
 
     try {
-        let res = await fetch("http://127.0.0.1:8000/predict_price", {
+        let res = await fetch(`${BASE_URL}/token`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
