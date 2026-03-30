@@ -1,97 +1,122 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <title>Login</title>
-    <style>
-        body {
-            margin: 0;
-            font-family: Arial;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
+<meta charset="UTF-8">
+<title>Login</title>
 
-        .card {
-            background: rgba(255, 255, 255, 0.12);
-            backdrop-filter: blur(15px);
-            padding: 35px;
-            border-radius: 20px;
-            width: 320px;
-            text-align: center;
-            color: white;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.2);
-        }
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
 
-        h2 {
-            margin-bottom: 20px;
-        }
+body {
+    font-family: 'Segoe UI', sans-serif;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(135deg, #141e30, #243b55);
+}
 
-        input {
-            width: 100%;
-            padding: 12px;
-            margin: 12px 0;
-            border: none;
-            border-radius: 10px;
-            outline: none;
-            font-size: 14px;
-        }
+/* Glass Card */
+.card {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px);
+    padding: 40px;
+    border-radius: 20px;
+    width: 340px;
+    text-align: center;
+    color: white;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    animation: fadeIn 0.8s ease;
+}
 
-        button {
-            width: 100%;
-            padding: 12px;
-            background: #00c6ff;
-            border: none;
-            color: white;
-            border-radius: 10px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: 0.3s;
-        }
+/* Title */
+.card h2 {
+    margin-bottom: 25px;
+    font-weight: 600;
+}
 
-        button:hover {
-            background: #0072ff;
-            transform: scale(1.03);
-        }
+/* Inputs */
+.input-box {
+    position: relative;
+    margin: 15px 0;
+}
 
-        #result {
-            margin-top: 15px;
-            font-weight: bold;
-        }
+.input-box input {
+    width: 100%;
+    padding: 12px 12px;
+    border-radius: 10px;
+    border: none;
+    outline: none;
+    font-size: 14px;
+}
 
-        .success {
-            color: #00ffcc;
-        }
+/* Button */
+button {
+    width: 100%;
+    padding: 12px;
+    margin-top: 10px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(90deg, #00c6ff, #0072ff);
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.3s;
+}
 
-        .error {
-            color: #ff4d4d;
-        }
+button:hover {
+    transform: scale(1.05);
+}
 
-        .loader {
-            display: none;
-            margin-top: 10px;
-        }
+/* Result */
+#result {
+    margin-top: 15px;
+    font-weight: bold;
+}
 
-        a {
-            color: #ffd;
-            text-decoration: none;
-        }
+.success { color: #00ffcc; }
+.error { color: #ff4d4d; }
 
-        a:hover {
-            text-decoration: underline;
-        }
-    </style>
+/* Loader */
+.loader {
+    display: none;
+    margin-top: 10px;
+}
+
+/* Link */
+a {
+    color: #ddd;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* Animation */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>
 </head>
 
 <body>
 
 <div class="card">
-    <h2>🚗 Car Rental Login</h2>
+    <h2>🚗 Welcome Back</h2>
 
-    <input type="email" id="email" placeholder="Email">
-    <input type="password" id="password" placeholder="Password">
+    <div class="input-box">
+        <input type="email" id="email" placeholder="Email">
+    </div>
+
+    <div class="input-box">
+        <input type="password" id="password" placeholder="Password">
+    </div>
 
     <button onclick="login()">Login</button>
 
@@ -99,17 +124,22 @@
 
     <p id="result"></p>
 
-    <p>Don't have an account? <a href="register.html">Register</a></p>
+    <p style="margin-top:15px;">
+        New here? <a href="register.html">Create account</a>
+    </p>
 </div>
 
 <script>
-
 const BASE_URL = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"
     ? "http://127.0.0.1:8000"
     : "https://car-rental-pricing.onrender.com";
 
-async function login() {
+// Redirect if already logged in
+if (localStorage.getItem("token")) {
+    window.location.href = "index.html";
+}
 
+async function login() {
     let email = document.getElementById("email").value;
     let password = document.getElementById("password").value;
 
@@ -138,24 +168,23 @@ async function login() {
             body: formData
         });
 
-        let data = await res.json();
-
         loader.style.display = "none";
 
-        if (data.access_token) {
-            localStorage.setItem("token", data.access_token);
-
-            result.innerHTML = "✅ Login successful";
-            result.className = "success";
-
-            setTimeout(() => {
-                window.location.href = "index.html";
-            }, 1000);
-
-        } else {
-            result.innerHTML = "❌ Invalid email or password";
+        if (!res.ok) {
+            result.innerHTML = "❌ Invalid credentials";
             result.className = "error";
+            return;
         }
+
+        let data = await res.json();
+        localStorage.setItem("token", data.access_token);
+
+        result.innerHTML = "✅ Login successful";
+        result.className = "success";
+
+        setTimeout(() => {
+            window.location.href = "index.html";
+        }, 800);
 
     } catch (err) {
         loader.style.display = "none";
@@ -163,7 +192,6 @@ async function login() {
         result.className = "error";
     }
 }
-
 </script>
 
 </body>

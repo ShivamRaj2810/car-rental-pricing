@@ -1,188 +1,248 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <title>Car Rental Pricing</title>
-    <style>
-        body {
-            font-family: Arial;
-            background: #f4f6f9;
-            padding: 20px;
-        }
+<title>Ride Booking</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-        h1 {
-            text-align: center;
-        }
+<style>
+body {
+    margin: 0;
+    font-family: 'Segoe UI', sans-serif;
+    background: #f5f5f5;
+}
 
-        .container {
-            max-width: 900px;
-            margin: auto;
-        }
+/* Header */
+.header {
+    background: black;
+    color: white;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
 
-        .cards {
-            display: flex;
-            gap: 20px;
-            justify-content: center;
-            margin-bottom: 20px;
-        }
+.header button {
+    background: white;
+    color: black;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 20px;
+    cursor: pointer;
+}
 
-        .card {
-            background: white;
-            padding: 20px;
-            width: 200px;
-            border-radius: 15px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-            cursor: pointer;
-            text-align: center;
-            transition: 0.3s;
-        }
+/* Container */
+.container {
+    max-width: 500px;
+    margin: auto;
+    padding: 20px;
+}
 
-        .card:hover {
-            transform: scale(1.05);
-        }
+/* Inputs */
+input {
+    width: 100%;
+    padding: 14px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    margin-bottom: 15px;
+}
 
-        .selected {
-            border: 3px solid #007bff;
-        }
+/* Cards */
+.cards {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
 
-        .form {
-            background: white;
-            padding: 20px;
-            border-radius: 15px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        }
+.card {
+    background: white;
+    padding: 15px;
+    border-radius: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    transition: 0.3s;
+}
 
-        input, button {
-            width: 100%;
-            padding: 12px;
-            margin: 10px 0;
-        }
+.card:hover {
+    transform: scale(1.02);
+}
 
-        button {
-            background: #007bff;
-            color: white;
-            border: none;
-            font-size: 16px;
-            cursor: pointer;
-        }
+.card.selected {
+    border: 2px solid black;
+}
 
-        button:hover {
-            background: #0056b3;
-        }
+/* Buttons */
+button.main {
+    width: 100%;
+    padding: 15px;
+    border: none;
+    border-radius: 10px;
+    background: black;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    margin-top: 10px;
+}
 
-        .result {
-            margin-top: 20px;
-            text-align: center;
-            font-weight: bold;
-        }
-    </style>
+/* Result Card */
+.result {
+    margin-top: 20px;
+    background: white;
+    padding: 15px;
+    border-radius: 10px;
+    display: none;
+}
+
+.price {
+    font-size: 22px;
+    font-weight: bold;
+}
+</style>
 </head>
+
 <body>
 
+<div class="header">
+    <h3>🚗 Ride</h3>
+    <button onclick="logout()">Logout</button>
+</div>
+
 <div class="container">
-    <h1>🚗 Dynamic Car Pricing</h1>
 
-    <!-- Car Cards -->
+    <!-- Pickup & Drop -->
+    <input type="text" id="pickup" placeholder="📍 Enter pickup location">
+    <input type="text" id="drop" placeholder="🏁 Enter drop location">
+
+    <!-- Ride Options -->
     <div class="cards">
-        <div class="card" onclick="selectCar(this,1500)">
-            <h3>🚗 Hatchback</h3>
-            <p>₹1500</p>
+
+        <div class="card" onclick="selectCar(this,1500,'Hatchback')">
+            <div>
+                <strong>🚗 Hatchback</strong><br>
+                <small>Affordable rides</small>
+            </div>
+            <div>₹1500</div>
         </div>
 
-        <div class="card" onclick="selectCar(this,2000)">
-            <h3>🚘 Sedan</h3>
-            <p>₹2000</p>
+        <div class="card" onclick="selectCar(this,2000,'Sedan')">
+            <div>
+                <strong>🚘 Sedan</strong><br>
+                <small>Comfort rides</small>
+            </div>
+            <div>₹2000</div>
         </div>
 
-        <div class="card" onclick="selectCar(this,3000)">
-            <h3>🚙 SUV</h3>
-            <p>₹3000</p>
+        <div class="card" onclick="selectCar(this,3000,'SUV')">
+            <div>
+                <strong>🚙 SUV</strong><br>
+                <small>Premium rides</small>
+            </div>
+            <div>₹3000</div>
         </div>
+
     </div>
 
-    <!-- Form -->
-    <div class="form">
-        <input type="text" id="location" placeholder="Enter city (e.g. Delhi)">
-        <button onclick="getPrice()">Get Price</button>
-    </div>
+    <button class="main" onclick="getPrice()">Check Price</button>
+    <button id="bookBtn" class="main" onclick="bookRide()" style="display:none;">Book Ride</button>
 
+    <!-- Result -->
     <div class="result" id="result"></div>
+
 </div>
 
 <script>
 
-const BASE_URL = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"
-    ? "http://127.0.0.1:8000"
-    : "https://car-rental-pricing.onrender.com";
+// 🔐 Protect page
+if (!localStorage.getItem("token")) {
+    window.location.href = "login.html";
+}
+
+const BASE_URL = "http://127.0.0.1:8000";
 
 let selectedPrice = null;
+let selectedCar = "";
 
 // Select car
-function selectCar(element, price) {
+function selectCar(el, price, car) {
     document.querySelectorAll(".card").forEach(c => c.classList.remove("selected"));
-    element.classList.add("selected");
+    el.classList.add("selected");
+
     selectedPrice = price;
+    selectedCar = car;
+}
+
+// Logout
+function logout() {
+    localStorage.removeItem("token");
+    window.location.href = "login.html";
 }
 
 // Get price
 async function getPrice() {
 
-    if (!selectedPrice) {
-        alert("Please select a car type");
+    let pickup = document.getElementById("pickup").value;
+    let drop = document.getElementById("drop").value;
+
+    if (!selectedPrice || !pickup || !drop) {
+        alert("Select ride & enter pickup + drop");
         return;
     }
 
-    let location = document.getElementById("location").value;
-
-    if (!location) {
-        alert("Enter location");
-        return;
-    }
-
-    document.getElementById("result").innerHTML = "⏳ Calculating best price...";
+    document.getElementById("result").style.display = "block";
+    document.getElementById("result").innerHTML = "⏳ Calculating...";
 
     let token = localStorage.getItem("token");
 
     try {
-        let res = await fetch(`${BASE_URL}/token`, {
+        let res = await fetch(`${BASE_URL}/predict_price`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`
+                "Authorization": "Bearer " + token
             },
             body: JSON.stringify({
-                base_price: selectedPrice,
-                location: location
+                location: pickup,
+                base_price: selectedPrice
             })
         });
 
-        // ✅ HANDLE ERROR STATUS
         if (!res.ok) {
-            let err = await res.text();
-            document.getElementById("result").innerHTML = "❌ Error: " + err;
+            document.getElementById("result").innerHTML = "❌ Error fetching price";
             return;
         }
 
-        // ✅ PARSE RESPONSE
         let data = await res.json();
-        console.log("API RESPONSE:", data);
 
-        // ✅ SHOW RESULT
         document.getElementById("result").innerHTML = `
-            📍 ${location}<br>
-            🌦 ${data.weather}<br>
-            🚗 Cars: ${data.available_cars}<br>
-            ⭐ Rating: ${data.customer_rating}<br>
-            📅 Weekend: ${data.weekend ? "Yes" : "No"}<br>
-            💰 Price: ₹${data.dynamic_price.toFixed(2)}<br>
-            📈 Demand: ${data.demand.toFixed(2)}
+            <div><strong>${selectedCar}</strong></div>
+            <div>📍 ${pickup} → ${drop}</div>
+            <div class="price">₹${data.dynamic_price.toFixed(2)}</div>
+            <div>📈 Demand: ${data.demand.toFixed(2)}</div>
         `;
 
-    } catch (error) {
-        console.error("ERROR:", error);
-        document.getElementById("result").innerHTML = "❌ Failed to fetch data";
+        // ✅ Show Book button
+        document.getElementById("bookBtn").style.display = "block";
+
+    } catch (err) {
+        document.getElementById("result").innerHTML = "❌ Server error";
     }
 }
+
+// Book ride
+function bookRide() {
+    let pickup = document.getElementById("pickup").value;
+    let drop = document.getElementById("drop").value;
+
+    document.getElementById("result").innerHTML = `
+        ✅ Ride Confirmed!<br>
+        🚗 ${selectedCar}<br>
+        📍 ${pickup} → ${drop}<br>
+        🚘 Driver arriving in 5 mins
+    `;
+}
+
 </script>
 
 </body>
