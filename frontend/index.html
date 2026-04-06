@@ -149,7 +149,7 @@ button.main:hover {
 let token = localStorage.getItem("token");
 
 if (!token) {
-    window.location.href = "login";
+    window.location.href = "login.html";
 }
 
 // 🌐 Backend URL
@@ -174,7 +174,7 @@ function selectCar(el, price, car) {
 // 🔐 Logout
 function logout() {
     localStorage.removeItem("token");
-    window.location.href = "/login";
+    window.location.href = "/login.html";
 }
 
 // 💰 Get price

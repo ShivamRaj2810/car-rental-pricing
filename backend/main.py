@@ -5,7 +5,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import pandas as pd
 import numpy as np
 import pickle
-from datetime import datetime
+from datetime import datetime, timedelta
 import random
 import sqlite3
 import requests
@@ -17,7 +17,7 @@ from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
 from dotenv import load_dotenv
 
-from pricing_logic import surge_price, weather_adjustment
+from backend.pricing_logic import surge_price, weather_adjustment
 
 # -------------------------------
 # ENV
@@ -26,6 +26,15 @@ load_dotenv()
 API_KEY = os.getenv("OPENWEATHER_API_KEY")
 SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey")
 ALGORITHM = "HS256"
+
+# -------------------------------
+# PATHS (🔥 FIXED)
+# -------------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+DB_PATH = os.path.join(BASE_DIR, "database", "users.db")
+MODEL_PATH = os.path.join(BASE_DIR, "models", "price_model.pkl")
+DATA_PATH = os.path.join(BASE_DIR, "dataset", "demand_data.csv")
 
 # -------------------------------
 # MODELS
@@ -46,7 +55,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # allow all (for local + frontend)
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -65,13 +74,18 @@ def verify_password(plain, hashed):
     return pwd_context.verify(plain, hashed)
 
 def create_access_token(data: dict):
-    return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(hours=2)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 # -------------------------------
 # DATABASE
 # -------------------------------
 def create_user_table():
-    conn = sqlite3.connect("database/users.db")
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -89,7 +103,7 @@ def create_user_table():
 create_user_table()
 
 def get_user(email: str):
-    conn = sqlite3.connect("database/users.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("SELECT email, password, customer_rating FROM users WHERE email=?", (email,))
@@ -125,7 +139,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 @app.post("/register")
 def register_user(user: UserRegister):
 
-    conn = sqlite3.connect("database/users.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("SELECT * FROM users WHERE email=?", (user.email,))
@@ -179,6 +193,9 @@ def get_available_cars(location):
         return random.randint(40, 80)
 
 def get_weather(city):
+    if not API_KEY:
+        return "clear"
+
     try:
         url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}"
         res = requests.get(url)
@@ -202,12 +219,11 @@ def get_weather(city):
         return "clear"
 
 # -------------------------------
-# OSRM DISTANCE
+# DISTANCE
 # -------------------------------
 def get_coordinates(place):
     try:
         url = "https://nominatim.openstreetmap.org/search"
-
         params = {"q": place, "format": "json", "limit": 1}
         headers = {"User-Agent": "car-rental-app"}
 
@@ -226,7 +242,7 @@ def get_coordinates(place):
 def get_distance(pickup, drop):
     try:
         lat1, lon1 = get_coordinates(pickup)
-        time.sleep(1)  # prevent rate limit
+        time.sleep(1)
         lat2, lon2 = get_coordinates(drop)
 
         if not lat1 or not lat2:
@@ -250,10 +266,10 @@ def get_distance(pickup, drop):
 # -------------------------------
 # LOAD MODEL
 # -------------------------------
-price_model = pickle.load(open("models/price_model.pkl", "rb"))
+price_model = pickle.load(open(MODEL_PATH, "rb"))
 
 def get_predicted_demand():
-    df = pd.read_csv("dataset/demand_data.csv")
+    df = pd.read_csv(DATA_PATH)
     recent = df["bookings"].tail(10)
     weights = np.arange(1, len(recent) + 1)
     return float(np.average(recent, weights=weights))
@@ -274,11 +290,9 @@ def predict_price(data: PriceRequest, current_user: dict = Depends(get_current_u
 
     distance_km, distance_text = get_distance(pickup, drop)
 
-    predicted_demand = get_predicted_demand()
+    demand = get_predicted_demand()
 
-    # 🔥 fallback (VERY IMPORTANT)
     if distance_km is None:
-        print("Using fallback distance")
         distance_km = random.uniform(3, 10)
         distance_text = f"{distance_km:.2f} km (approx)"
 
@@ -287,9 +301,6 @@ def predict_price(data: PriceRequest, current_user: dict = Depends(get_current_u
     rating = current_user["customer_rating"]
     weather = get_weather(pickup)
 
-    demand = get_predicted_demand()
-
-    # price logic
     distance_cost = distance_km * 12
     base_price += distance_cost
 
@@ -304,19 +315,23 @@ def predict_price(data: PriceRequest, current_user: dict = Depends(get_current_u
         "base_price": price
     }])
 
-    final_price = price_model.predict(input_data)[0]
-    final_price = max(final_price,base_price)
+    try:
+        final_price = price_model.predict(input_data)[0]
+    except:
+        final_price = base_price
+
+    final_price = max(final_price, base_price)
 
     return {
-    "pickup": pickup,
-    "drop": drop,
-    "distance_km": float(distance_km),
-    "distance_text": distance_text,   # 🔥 THIS WAS MISSING / FAILING
-    "distance_cost": float(distance_cost),
-    "dynamic_price": float(final_price),
-    "demand": float(predicted_demand),
-    "weather": weather
-}
+        "pickup": pickup,
+        "drop": drop,
+        "distance_km": float(distance_km),
+        "distance_text": distance_text,
+        "distance_cost": float(distance_cost),
+        "dynamic_price": float(final_price),
+        "demand": float(demand),
+        "weather": weather
+    }
 
 # -------------------------------
 # BOOKING
@@ -327,7 +342,7 @@ def book(current_user: dict = Depends(get_current_user)):
     email = current_user["email"]
     rating = min(5.0, current_user["customer_rating"] + 0.1)
 
-    conn = sqlite3.connect("database/users.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute(
@@ -342,3 +357,11 @@ def book(current_user: dict = Depends(get_current_user)):
         "message": "Ride booked 🚗",
         "new_rating": rating
     }
+
+# -------------------------------
+# RUN (🔥 PRODUCTION SAFE)
+# -------------------------------
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
