@@ -145,16 +145,20 @@ button.main:hover {
 
 <script>
 
-// 🔐 Protect page
-if (!localStorage.getItem("token")) {
-    window.location.href = "login.html";
+// 🔐 Check login FIRST
+let token = localStorage.getItem("token");
+
+if (!token) {
+    window.location.href = "login";
 }
 
-// 🌐 Backend URL (AUTO SWITCH)
-const BASE_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+// 🌐 Backend URL
+const BASE_URL =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1"
     ? "http://127.0.0.1:8000"
     : "https://car-rental-pricing.onrender.com";
-
+    
 let selectedPrice = null;
 let selectedCar = "";
 
@@ -170,7 +174,7 @@ function selectCar(el, price, car) {
 // 🔐 Logout
 function logout() {
     localStorage.removeItem("token");
-    window.location.href = "login.html";
+    window.location.href = "/login";
 }
 
 // 💰 Get price
@@ -188,7 +192,7 @@ async function getPrice() {
     resultDiv.style.display = "block";
     resultDiv.innerHTML = "⏳ Calculating...";
 
-    let token = localStorage.getItem("token");
+    console.log("Token:", token);
 
     try {
         let res = await fetch(`${BASE_URL}/predict_price`, {
@@ -198,19 +202,21 @@ async function getPrice() {
                 "Authorization": "Bearer " + token
             },
             body: JSON.stringify({
-                pickup: pickup,
-                drop: drop,
+                pickup,
+                drop,
                 base_price: selectedPrice
             })
         });
 
+        let text = await res.text();
+        console.log("Response:", text);
+
         if (!res.ok) {
-            let err = await res.text();
-            resultDiv.innerHTML = "❌ " + err;
+            resultDiv.innerHTML = "❌ " + text;
             return;
         }
 
-        let data = await res.json();
+        let data = JSON.parse(text);
 
         resultDiv.innerHTML = `
             <div><strong>${selectedCar}</strong></div>
@@ -224,15 +230,13 @@ async function getPrice() {
         document.getElementById("bookBtn").style.display = "block";
 
     } catch (err) {
-        resultDiv.innerHTML = "❌ Server error";
         console.error(err);
+        resultDiv.innerHTML = "❌ Server error";
     }
 }
 
 // 🚘 Book ride
 async function bookRide() {
-
-    let token = localStorage.getItem("token");
 
     try {
         let res = await fetch(`${BASE_URL}/book`, {

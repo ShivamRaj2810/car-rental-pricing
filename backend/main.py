@@ -305,6 +305,7 @@ def predict_price(data: PriceRequest, current_user: dict = Depends(get_current_u
     }])
 
     final_price = price_model.predict(input_data)[0]
+    final_price = max(final_price,base_price)
 
     return {
     "pickup": pickup,
