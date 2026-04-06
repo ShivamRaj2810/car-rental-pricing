@@ -4,62 +4,17 @@
 <meta charset="UTF-8">
 <title>Ride Booking</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <style>
-body {
-    margin: 0;
-    font-family: 'Segoe UI', sans-serif;
-    background: #f5f5f5;
-}
-.header {
-    background: black;
-    color: white;
-    padding: 15px 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-.container {
-    max-width: 500px;
-    margin: auto;
-    padding: 20px;
-}
-input {
-    width: 100%;
-    padding: 14px;
-    border-radius: 10px;
-    border: 1px solid #ccc;
-    margin-bottom: 15px;
-}
-.card {
-    background: white;
-    padding: 15px;
-    border-radius: 15px;
-    display: flex;
-    justify-content: space-between;
-    cursor: pointer;
-    margin-bottom: 10px;
-}
-.card.selected { border: 2px solid black; }
-button.main {
-    width: 100%;
-    padding: 15px;
-    background: black;
-    color: white;
-    border: none;
-    border-radius: 10px;
-    cursor: pointer;
-}
-.result {
-    margin-top: 20px;
-    background: white;
-    padding: 15px;
-    border-radius: 10px;
-    display: none;
-}
+body { margin:0; font-family:'Segoe UI',sans-serif; background:#f5f5f5; }
+.header { background:black; color:white; padding:15px 20px; display:flex; justify-content:space-between; align-items:center; }
+.container { max-width:500px; margin:auto; padding:20px; }
+input { width:100%; padding:14px; border-radius:10px; border:1px solid #ccc; margin-bottom:15px; }
+.card { background:white; padding:15px; border-radius:15px; display:flex; justify-content:space-between; cursor:pointer; margin-bottom:10px; }
+.card.selected { border:2px solid black; }
+button.main { width:100%; padding:15px; background:black; color:white; border:none; border-radius:10px; cursor:pointer; }
+.result { margin-top:20px; background:white; padding:15px; border-radius:10px; display:none; }
 </style>
 </head>
-
 <body>
 
 <div class="header">
@@ -68,105 +23,86 @@ button.main {
 </div>
 
 <div class="container">
-
 <input id="pickup" placeholder="📍 Pickup">
 <input id="drop" placeholder="🏁 Drop">
 
-<div class="card" onclick="selectCar(this,500,'Hatchback')">
-    <div>🚗 Hatchback</div><div>₹500</div>
-</div>
-
-<div class="card" onclick="selectCar(this,1000,'Sedan')">
-    <div>🚘 Sedan</div><div>₹1000</div>
-</div>
-
-<div class="card" onclick="selectCar(this,1500,'SUV')">
-    <div>🚙 SUV</div><div>₹1500</div>
-</div>
+<div class="card" onclick="selectCar(this,500,'Hatchback')"><div>🚗 Hatchback</div><div>₹500</div></div>
+<div class="card" onclick="selectCar(this,1000,'Sedan')"><div>🚘 Sedan</div><div>₹1000</div></div>
+<div class="card" onclick="selectCar(this,1500,'SUV')"><div>🚙 SUV</div><div>₹1500</div></div>
 
 <button class="main" onclick="getPrice()">Check Price</button>
 <button id="bookBtn" class="main" onclick="bookRide()" style="display:none;">Book Ride</button>
-
 <div class="result" id="result"></div>
-
 </div>
 
 <script>
-// ----------------------
-// ✅ CONFIG
-// ----------------------
-const BASE_URL = "https://car-rental-backend-zv56.onrender.com"; // HTTPS Render backend
+// ✅ BASE URL
+const BASE_URL = "https://car-rental-backend-zv56.onrender.com";
+
+// ✅ TOKEN HANDLING
+let token = localStorage.getItem("token");
+if (!token) {
+    alert("Please login first");
+    window.location.href = "login.html";
+}
 
 let selectedPrice = null;
 let selectedCar = "";
 
-// ----------------------
-// 🔐 TOKEN HANDLING
-// ----------------------
-function getToken() {
-    const token = localStorage.getItem("token");
-    if (!token) {
-        alert("Please login first");
-        window.location.href = "login.html";
-    }
-    return token;
-}
-
-// ----------------------
 // 🚗 SELECT CAR
-// ----------------------
 function selectCar(el, price, car) {
-    document.querySelectorAll(".card").forEach(c => c.classList.remove("selected"));
+    document.querySelectorAll(".card").forEach(c=>c.classList.remove("selected"));
     el.classList.add("selected");
     selectedPrice = price;
     selectedCar = car;
 }
 
-// ----------------------
 // 🔐 LOGOUT
-// ----------------------
 function logout() {
     localStorage.removeItem("token");
     window.location.href = "login.html";
 }
 
-// ----------------------
-// 💰 GET PRICE
-// ----------------------
-async function getPrice() {
-    const token = getToken();
-    const pickup = document.getElementById("pickup").value.trim();
-    const drop = document.getElementById("drop").value.trim();
+// 🔹 FETCH WITH TIMEOUT
+async function fetchWithTimeout(url, options={}, timeout=10000) {
+    return Promise.race([
+        fetch(url, options),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), timeout))
+    ]);
+}
 
+// 💰 GET PRICE
+async function getPrice() {
+    let pickup = document.getElementById("pickup").value.trim();
+    let drop = document.getElementById("drop").value.trim();
     if (!selectedPrice || !pickup || !drop) {
-        alert("Select car and enter pickup/drop locations");
+        alert("Select car and enter locations");
         return;
     }
 
-    const resultDiv = document.getElementById("result");
+    let resultDiv = document.getElementById("result");
     resultDiv.style.display = "block";
     resultDiv.innerHTML = "⏳ Calculating...";
 
     try {
-        const res = await fetch(`${BASE_URL}/predict_price`, {
-            method: "POST",
+        let res = await fetchWithTimeout(`${BASE_URL}/predict_price`, {
+            method:"POST",
             headers: {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer " + token
+                "Content-Type":"application/json",
+                "Authorization":"Bearer "+token
             },
-            body: JSON.stringify({ pickup, drop, base_price: selectedPrice })
-        });
+            body: JSON.stringify({pickup, drop, base_price:selectedPrice})
+        }, 15000); // 15s timeout
 
-        if (res.status === 401) {
-            alert("Session expired. Please login again.");
+        if (res.status===401) {
+            alert("Session expired. Login again.");
             logout();
             return;
         }
 
-        const data = await res.json();
-
+        let data = await res.json();
         if (!res.ok) {
-            resultDiv.innerHTML = "❌ " + (data.detail || "Server error");
+            resultDiv.innerHTML = "❌ "+(data.detail || "Error");
             return;
         }
 
@@ -179,43 +115,37 @@ async function getPrice() {
         `;
         document.getElementById("bookBtn").style.display = "block";
 
-    } catch (err) {
+    } catch(err) {
         console.error(err);
-        resultDiv.innerHTML = "❌ Unable to reach server. Check your connection.";
+        resultDiv.innerHTML = "❌ Server error or timeout";
     }
 }
 
-// ----------------------
 // 🚘 BOOK RIDE
-// ----------------------
 async function bookRide() {
-    const token = getToken();
-    const resultDiv = document.getElementById("result");
+    let resultDiv = document.getElementById("result");
+    resultDiv.innerHTML = "⏳ Booking...";
 
     try {
-        const res = await fetch(`${BASE_URL}/book`, {
-            method: "POST",
-            headers: { "Authorization": "Bearer " + token }
-        });
+        let res = await fetchWithTimeout(`${BASE_URL}/book`, {
+            method:"POST",
+            headers:{ "Authorization":"Bearer "+token }
+        }, 10000);
 
-        if (res.status === 401) {
-            alert("Session expired. Login again.");
+        if (res.status===401) {
+            alert("Login expired");
             logout();
             return;
         }
 
-        const data = await res.json();
-        resultDiv.innerHTML = `
-            ✅ Ride Booked<br>
-            ⭐ New Rating: ${data.new_rating}
-        `;
+        let data = await res.json();
+        resultDiv.innerHTML = `✅ Ride Booked<br>⭐ Rating: ${data.new_rating}`;
 
-    } catch (err) {
+    } catch(err) {
         console.error(err);
-        resultDiv.innerHTML = "❌ Booking failed. Please try again later.";
+        resultDiv.innerHTML = "❌ Booking failed or timeout";
     }
 }
 </script>
-
 </body>
 </html>
