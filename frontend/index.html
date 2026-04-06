@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>Ride Booking</title>
@@ -11,7 +11,6 @@ body {
     font-family: 'Segoe UI', sans-serif;
     background: #f5f5f5;
 }
-
 .header {
     background: black;
     color: white;
@@ -20,13 +19,11 @@ body {
     justify-content: space-between;
     align-items: center;
 }
-
 .container {
     max-width: 500px;
     margin: auto;
     padding: 20px;
 }
-
 input {
     width: 100%;
     padding: 14px;
@@ -34,7 +31,6 @@ input {
     border: 1px solid #ccc;
     margin-bottom: 15px;
 }
-
 .card {
     background: white;
     padding: 15px;
@@ -44,11 +40,7 @@ input {
     cursor: pointer;
     margin-bottom: 10px;
 }
-
-.card.selected {
-    border: 2px solid black;
-}
-
+.card.selected { border: 2px solid black; }
 button.main {
     width: 100%;
     padding: 15px;
@@ -58,7 +50,6 @@ button.main {
     border-radius: 10px;
     cursor: pointer;
 }
-
 .result {
     margin-top: 20px;
     background: white;
@@ -101,26 +92,29 @@ button.main {
 </div>
 
 <script>
-
-// ✅ TOKEN HANDLING
-let token = localStorage.getItem("token");
-
-if (!token) {
-    alert("Please login first");
-    window.location.href = "login.html";
-}
-
-// 🌐 BACKEND URL (IMPORTANT: NO trailing slash)
-const BASE_URL =
-    window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1"
-    ? "http://127.0.0.1:8000"
-    : "https://car-rental-backend-zv56.onrender.com";
+// ----------------------
+// ✅ CONFIG
+// ----------------------
+const BASE_URL = "https://car-rental-backend-zv56.onrender.com"; // HTTPS Render backend
 
 let selectedPrice = null;
 let selectedCar = "";
 
+// ----------------------
+// 🔐 TOKEN HANDLING
+// ----------------------
+function getToken() {
+    const token = localStorage.getItem("token");
+    if (!token) {
+        alert("Please login first");
+        window.location.href = "login.html";
+    }
+    return token;
+}
+
+// ----------------------
 // 🚗 SELECT CAR
+// ----------------------
 function selectCar(el, price, car) {
     document.querySelectorAll(".card").forEach(c => c.classList.remove("selected"));
     el.classList.add("selected");
@@ -128,55 +122,51 @@ function selectCar(el, price, car) {
     selectedCar = car;
 }
 
+// ----------------------
 // 🔐 LOGOUT
+// ----------------------
 function logout() {
     localStorage.removeItem("token");
     window.location.href = "login.html";
 }
 
+// ----------------------
 // 💰 GET PRICE
+// ----------------------
 async function getPrice() {
-
-    let pickup = document.getElementById("pickup").value.trim();
-    let drop = document.getElementById("drop").value.trim();
+    const token = getToken();
+    const pickup = document.getElementById("pickup").value.trim();
+    const drop = document.getElementById("drop").value.trim();
 
     if (!selectedPrice || !pickup || !drop) {
-        alert("Select car + enter locations");
+        alert("Select car and enter pickup/drop locations");
         return;
     }
 
-    let resultDiv = document.getElementById("result");
+    const resultDiv = document.getElementById("result");
     resultDiv.style.display = "block";
     resultDiv.innerHTML = "⏳ Calculating...";
 
     try {
-        let res = await fetch(`${BASE_URL}/predict_price`, {
+        const res = await fetch(`${BASE_URL}/predict_price`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 "Authorization": "Bearer " + token
             },
-            body: JSON.stringify({
-                pickup,
-                drop,
-                base_price: selectedPrice
-            })
+            body: JSON.stringify({ pickup, drop, base_price: selectedPrice })
         });
 
-        // 🔥 DEBUG
-        console.log("Status:", res.status);
-
         if (res.status === 401) {
-            alert("Session expired. Login again.");
+            alert("Session expired. Please login again.");
             logout();
             return;
         }
 
-        let data = await res.json();
-        console.log("Response:", data);
+        const data = await res.json();
 
         if (!res.ok) {
-            resultDiv.innerHTML = "❌ " + (data.detail || "Error");
+            resultDiv.innerHTML = "❌ " + (data.detail || "Server error");
             return;
         }
 
@@ -187,44 +177,44 @@ async function getPrice() {
             💰 ₹${data.dynamic_price.toFixed(2)}<br>
             🌦 ${data.weather}<br>
         `;
-
         document.getElementById("bookBtn").style.display = "block";
 
     } catch (err) {
         console.error(err);
-        resultDiv.innerHTML = "❌ Server error";
+        resultDiv.innerHTML = "❌ Unable to reach server. Check your connection.";
     }
 }
 
+// ----------------------
 // 🚘 BOOK RIDE
+// ----------------------
 async function bookRide() {
+    const token = getToken();
+    const resultDiv = document.getElementById("result");
 
     try {
-        let res = await fetch(`${BASE_URL}/book`, {
+        const res = await fetch(`${BASE_URL}/book`, {
             method: "POST",
-            headers: {
-                "Authorization": "Bearer " + token
-            }
+            headers: { "Authorization": "Bearer " + token }
         });
 
         if (res.status === 401) {
-            alert("Login expired");
+            alert("Session expired. Login again.");
             logout();
             return;
         }
 
-        let data = await res.json();
-
-        document.getElementById("result").innerHTML = `
+        const data = await res.json();
+        resultDiv.innerHTML = `
             ✅ Ride Booked<br>
-            ⭐ Rating: ${data.new_rating}
+            ⭐ New Rating: ${data.new_rating}
         `;
 
     } catch (err) {
-        document.getElementById("result").innerHTML = "❌ Booking failed";
+        console.error(err);
+        resultDiv.innerHTML = "❌ Booking failed. Please try again later.";
     }
 }
-
 </script>
 
 </body>
