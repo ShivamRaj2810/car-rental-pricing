@@ -21,18 +21,6 @@ body {
     align-items: center;
 }
 
-.header h3 {
-    margin: 0;
-}
-
-.header button {
-    background: white;
-    border: none;
-    padding: 8px 15px;
-    border-radius: 20px;
-    cursor: pointer;
-}
-
 .container {
     max-width: 500px;
     margin: auto;
@@ -45,13 +33,6 @@ input {
     border-radius: 10px;
     border: 1px solid #ccc;
     margin-bottom: 15px;
-    font-size: 14px;
-}
-
-.cards {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
 }
 
 .card {
@@ -61,12 +42,7 @@ input {
     display: flex;
     justify-content: space-between;
     cursor: pointer;
-    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
-    transition: 0.2s;
-}
-
-.card:hover {
-    transform: scale(1.02);
+    margin-bottom: 10px;
 }
 
 .card.selected {
@@ -80,13 +56,7 @@ button.main {
     color: white;
     border: none;
     border-radius: 10px;
-    margin-top: 10px;
     cursor: pointer;
-    font-size: 15px;
-}
-
-button.main:hover {
-    background: #222;
 }
 
 .result {
@@ -95,12 +65,6 @@ button.main:hover {
     padding: 15px;
     border-radius: 10px;
     display: none;
-}
-
-.price {
-    font-size: 24px;
-    font-weight: bold;
-    margin-top: 10px;
 }
 </style>
 </head>
@@ -114,85 +78,76 @@ button.main:hover {
 
 <div class="container">
 
-    <!-- Locations -->
-    <input id="pickup" placeholder="📍 Pickup (e.g. Ranchi Railway Station)">
-    <input id="drop" placeholder="🏁 Drop (e.g. Airport)">
+<input id="pickup" placeholder="📍 Pickup">
+<input id="drop" placeholder="🏁 Drop">
 
-    <!-- Cars -->
-    <div class="cards">
-        <div class="card" onclick="selectCar(this,500,'Hatchback')">
-            <div>🚗 Hatchback</div>
-            <div>₹500</div>
-        </div>
+<div class="card" onclick="selectCar(this,500,'Hatchback')">
+    <div>🚗 Hatchback</div><div>₹500</div>
+</div>
 
-        <div class="card" onclick="selectCar(this,1000,'Sedan')">
-            <div>🚘 Sedan</div>
-            <div>₹1000</div>
-        </div>
+<div class="card" onclick="selectCar(this,1000,'Sedan')">
+    <div>🚘 Sedan</div><div>₹1000</div>
+</div>
 
-        <div class="card" onclick="selectCar(this,1500,'SUV')">
-            <div>🚙 SUV</div>
-            <div>₹1500</div>
-        </div>
-    </div>
+<div class="card" onclick="selectCar(this,1500,'SUV')">
+    <div>🚙 SUV</div><div>₹1500</div>
+</div>
 
-    <button class="main" onclick="getPrice()">Check Price</button>
-    <button id="bookBtn" class="main" onclick="bookRide()" style="display:none;">Book Ride</button>
+<button class="main" onclick="getPrice()">Check Price</button>
+<button id="bookBtn" class="main" onclick="bookRide()" style="display:none;">Book Ride</button>
 
-    <div class="result" id="result"></div>
+<div class="result" id="result"></div>
 
 </div>
 
 <script>
 
-// 🔐 Check login FIRST
+// ✅ TOKEN HANDLING
 let token = localStorage.getItem("token");
 
 if (!token) {
+    alert("Please login first");
     window.location.href = "login.html";
 }
 
-// 🌐 Backend URL
+// 🌐 BACKEND URL (IMPORTANT: NO trailing slash)
 const BASE_URL =
     window.location.hostname === "localhost" ||
     window.location.hostname === "127.0.0.1"
     ? "http://127.0.0.1:8000"
     : "https://car-rental-backend-zv56.onrender.com";
-    
+
 let selectedPrice = null;
 let selectedCar = "";
 
-// 🚗 Select car
+// 🚗 SELECT CAR
 function selectCar(el, price, car) {
     document.querySelectorAll(".card").forEach(c => c.classList.remove("selected"));
     el.classList.add("selected");
-
     selectedPrice = price;
     selectedCar = car;
 }
 
-// 🔐 Logout
+// 🔐 LOGOUT
 function logout() {
     localStorage.removeItem("token");
     window.location.href = "login.html";
 }
 
-// 💰 Get price
+// 💰 GET PRICE
 async function getPrice() {
 
     let pickup = document.getElementById("pickup").value.trim();
     let drop = document.getElementById("drop").value.trim();
 
     if (!selectedPrice || !pickup || !drop) {
-        alert("Select car + enter pickup & drop");
+        alert("Select car + enter locations");
         return;
     }
 
     let resultDiv = document.getElementById("result");
     resultDiv.style.display = "block";
     resultDiv.innerHTML = "⏳ Calculating...";
-
-    console.log("Token:", token);
 
     try {
         let res = await fetch(`${BASE_URL}/predict_price`, {
@@ -208,23 +163,29 @@ async function getPrice() {
             })
         });
 
-        let text = await res.text();
-        console.log("Response:", text);
+        // 🔥 DEBUG
+        console.log("Status:", res.status);
 
-        if (!res.ok) {
-            resultDiv.innerHTML = "❌ " + text;
+        if (res.status === 401) {
+            alert("Session expired. Login again.");
+            logout();
             return;
         }
 
-        let data = JSON.parse(text);
+        let data = await res.json();
+        console.log("Response:", data);
+
+        if (!res.ok) {
+            resultDiv.innerHTML = "❌ " + (data.detail || "Error");
+            return;
+        }
 
         resultDiv.innerHTML = `
-            <div><strong>${selectedCar}</strong></div>
-            <div>📍 ${data.pickup} → ${data.drop}</div>
-            <div>📏 Distance: ${data.distance_text}</div>
-            <div class="price">₹${data.dynamic_price.toFixed(2)}</div>
-            <div>🌦 Weather: ${data.weather}</div>
-            <div>📈 Demand: ${data.demand.toFixed(2)}</div>
+            <b>${selectedCar}</b><br>
+            📍 ${data.pickup} → ${data.drop}<br>
+            📏 ${data.distance_text}<br>
+            💰 ₹${data.dynamic_price.toFixed(2)}<br>
+            🌦 ${data.weather}<br>
         `;
 
         document.getElementById("bookBtn").style.display = "block";
@@ -235,7 +196,7 @@ async function getPrice() {
     }
 }
 
-// 🚘 Book ride
+// 🚘 BOOK RIDE
 async function bookRide() {
 
     try {
@@ -246,13 +207,17 @@ async function bookRide() {
             }
         });
 
+        if (res.status === 401) {
+            alert("Login expired");
+            logout();
+            return;
+        }
+
         let data = await res.json();
 
         document.getElementById("result").innerHTML = `
-            ✅ Ride Confirmed!<br><br>
-            🚗 ${selectedCar}<br>
-            ⭐ New Rating: ${data.new_rating}<br>
-            🚘 Driver arriving in 5 mins
+            ✅ Ride Booked<br>
+            ⭐ Rating: ${data.new_rating}
         `;
 
     } catch (err) {
