@@ -17,7 +17,7 @@ from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
 from dotenv import load_dotenv
 
-from backend.pricing_logic import surge_price, weather_adjustment
+from pricing_logic import surge_price, weather_adjustment
 
 # -------------------------------
 # ENV
