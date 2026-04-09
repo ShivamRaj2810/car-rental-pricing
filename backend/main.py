@@ -292,9 +292,9 @@ def predict_price(data: PriceRequest, current_user: dict = Depends(get_current_u
 
     demand = get_predicted_demand()
 
-    # if distance_km is None:
-    #     distance_km = random.uniform(3, 10)
-    #     distance_text = f"{distance_km:.2f} km (approx)"
+    if distance_km is None:
+        distance_km = random.uniform(3, 10)
+        distance_text = f"{distance_km:.2f} km (approx)"
 
     available_cars = get_available_cars(pickup)
     weekend = get_weekend()
